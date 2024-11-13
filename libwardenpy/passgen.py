@@ -1,6 +1,7 @@
 import string
 import secrets
 
+
 def generate_password(lenght: int = 14) -> str:
     alphabet = string.ascii_letters + string.digits
     while True:
