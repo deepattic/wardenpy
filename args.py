@@ -1,34 +1,40 @@
 import os
 import argparse
-import newapp
 from db import db
+
+from libwardenpy.migrations import migrate_DB
+
+from libwardenpy.funtionality import *
+from libwardenpy.passgen import generate_password
+
 
 authenticated = None
 
 def init_store(args) -> None:
+    migrate_DB()
     #WARNING: remove this if statement block
     db.execute('SELECT username FROM users;') 
     username = args.username
     if ((username,) not in db.fetchall()):
         print("create a strong and memorable password\nguide: https://anonymousplanet.org/guide.html#appendix-a2-guidelines-for-passwords-and-passphrases\n")
         password = password = input("Enter Master Password: ")
-        newapp.register_user(username, password)
-        args.username = None
+        register_user(username, password)
         global authenticated
         authenticated = True
     else:
     #TODO: remove this when complete
-        args.username = None
         print("Username exit")
+        exit()
 
 def main() -> None:
     global authenticated
     args = parse_arguments()
     if ((args.password != None and args.username != None)):
         password = args.password
-        newapp.authenticate_user(args.username, password)
+        authenticate_user(args.username, password)
     elif (args.username != None and args.password == None):
         password = input("Enter Master Password: ")
+        authenticate_user(args.username, password)
 
     authenticated = True
 
@@ -57,16 +63,16 @@ type .help for help and x or .exit to exit.
                 site = input(".add website_url > ")
                 site_pass = input(".add password (leave this blank for random password) > ")
                 if not site_pass:
-                    site_pass = newapp.generate_password()
-                newapp.add_password(
+                    site_pass = generate_password()
+                add_password(
                     args.username, args.password, site, site_pass
                 )
             if user_input == '2' or user_input.upper() == 'S' or user_input.upper() == '.SEARCH':
                 site = input(".search > ")
-                newapp.get_password(args.username, args.password, site)
+                get_password(args.username, args.password, site)
 
             if user_input == '3' or user_input.upper() == 'L' or user_input.upper() == '.LIST':
-                newapp.list_passwords(
+                list_passwords(
                     args.username, args.password
                 )
             if user_input.upper() == 'X' or user_input.upper() == '.EXIT':
