@@ -1,33 +1,33 @@
 import os
 import argparse
 from db import db
-
 from libwardenpy.migrations import migrate_DB
-
-from libwardenpy.funtionality import register_user, authenticate_user, add_password, list_passwords, get_password
+from libwardenpy.funtionality import (
+    register_user,
+    authenticate_user,
+    add_password,
+    list_passwords,
+    get_password,
+)
 from libwardenpy.passgen import generate_password
+from libwardenpy.colors import print_colored
+
+authenticated = False
 
 
-authenticated = None
-
-
+# TODO: remove this db execute funtion :? later
 def init_store(args) -> None:
     migrate_DB()
-    # WARNING: remove this if statement block
-    db.execute('SELECT username FROM users;')
+    db.execute("SELECT username FROM users;")
     username = args.username
-    if ((username,) not in db.fetchall()):
-        print(
-            """
-        create a strong and memorable password\n
-        guide: https://anonymousplanet.org/guide.html#appendix-a2-guidelines-for-passwords-and-passphrases\n
-
-            """
-              )
-        password = password = input("Enter Master Password: ")
+    if (username,) not in db.fetchall():
+        tips_text1 = (
+            "create a strong and memorable password\n"
+            "guide: https://anonymousplanet.org/guide.html#appendix-a2-guidelines-for-passwords-and-passphrases\n"
+        )
+        print_colored(tips_text1, "red")
+        password = input("Create Strong and Memorable Master Password: ")
         register_user(username, password)
-        global authenticated
-        authenticated = True
     else:
         # TODO: remove this when complete
         print("Username exit")
@@ -37,15 +37,15 @@ def init_store(args) -> None:
 def main() -> None:
     global authenticated
     args = parse_arguments()
-    if ((args.password is not None and args.username is not None)):
+    if args.password is not None and args.username is not None:
         password = args.password
-        authenticate_user(args.username, password)
-    elif (args.username is not None and args.password is None):
+        if authenticate_user(args.username, password) is not None:
+            authenticated = True
+    elif args.username is not None and args.password is None:
         password = input("Enter Master Password: ")
         args.password = password
-        authenticate_user(args.username, password)
-
-    authenticated = True
+        if authenticate_user(args.username, password) is not None:
+            authenticated = True
 
     if authenticated:
         banner = r"""
@@ -55,6 +55,7 @@ __        __            _            ______   __
   \ V  V / (_| | | | (_| |  __/ | | |  __/ | |
    \_/\_/ \__,_|_|  \__,_|\___|_| |_|_|    |_|
                             -- created by supun
+
 type .help for help and x or .exit to exit.
 
    1.) Add a Password       [A]
@@ -67,44 +68,58 @@ type .help for help and x or .exit to exit.
 
 def main_logic(args):
     while True:
-        user_input = input('> ')
-        if user_input.upper() == '.CLEAR':
-            os.system('clear')
-        if user_input == '?' or user_input.upper() == '.HELP':
+        user_input = input("> ")
+        if user_input.upper() == ".CLEAR":
+            os.system("clear")
+        if user_input == "?" or user_input.upper() == ".HELP":
             print(help_msg)
-        if user_input == '1' or user_input.upper() == 'A' or user_input.upper() == '.ADD':
+        if (
+            user_input == "1"
+            or user_input.upper() == "A"
+            or user_input.upper() == ".ADD"
+        ):
             site = input(".add website_url > ")
             site_pass = input(".add password (leave this blank for random password) > ")
             if not site_pass:
                 site_pass = generate_password()
-            add_password(
-                args.username, args.password, site, site_pass
-            )
-        if user_input == '2' or user_input.upper() == 'S' or user_input.upper() == '.SEARCH':
+            add_password(args.username, args.password, site, site_pass)
+        if (
+            user_input == "2"
+            or user_input.upper() == "S"
+            or user_input.upper() == ".SEARCH"
+        ):
             site = input(".search > ")
             get_password(args.username, args.password, site)
 
-        if user_input == '3' or user_input.upper() == 'L' or user_input.upper() == '.LIST':
-            list_passwords(
-                args.username, args.password
-            )
-        if user_input.upper() == 'X' or user_input.upper() == '.EXIT':
+        if (
+            user_input == "3"
+            or user_input.upper() == "L"
+            or user_input.upper() == ".LIST"
+        ):
+            list_passwords(args.username, args.password)
+        if user_input.upper() == "X" or user_input.upper() == ".EXIT":
             break
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers(
-        title='Commands',
+        title="Commands",
     )
     parser.add_argument("-u", "--username", help="use the username given here")
     parser.add_argument("-p", "--password", help="use the password given here")
     parser.add_argument("-a", "--add", help="add password")
 
-    init_parser = subparser.add_parser("init", aliases="i", help="Inizialize password repo")
-    init_parser.add_argument('username', help='username for initialize the password store')
+    init_parser = subparser.add_parser(
+        "init", aliases="i", help="Inizialize password repo"
+    )
+    init_parser.add_argument(
+        "username", help="username for initialize the password store"
+    )
     init_parser.set_defaults(func=init_store)
-    subparser.add_parser("new", help="Inizialize new password repo").set_defaults(func=init_store)
+    subparser.add_parser("new", help="Inizialize new password repo").set_defaults(
+        func=init_store
+    )
 
     args = parser.parse_args()
     if hasattr(args, "func"):
