@@ -1,26 +1,31 @@
-import os
 import argparse
-from db import db
-from libwardenpy.migrations import migrate_DB
+import os
+
+from libwardenpy.colors import colored_string, print_colored
+from libwardenpy.db import get_connection
 from libwardenpy.funtionality import (
-    register_user,
-    authenticate_user,
     add_password,
-    list_passwords,
+    authenticate_user,
+    delete_passwod,
     get_password,
+    list_passwords,
+    register_user,
 )
+from libwardenpy.migrations import migrate_DB
 from libwardenpy.passgen import generate_password
-from libwardenpy.colors import print_colored
 
 authenticated = False
 
 
-# TODO: remove this db execute funtion :? later
 def init_store(args) -> None:
     migrate_DB()
-    db.execute("SELECT username FROM users;")
-    username = args.username
-    if (username,) not in db.fetchall():
+    USER_NAME_EXIST = False
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT username FROM users;")
+        username = args.username
+        if (username,) in cursor.fetchall():
+            USER_NAME_EXIST = True
+    if not USER_NAME_EXIST:
         tips_text1 = (
             "create a strong and memorable password\n"
             "guide: https://anonymousplanet.org/guide.html#appendix-a2-guidelines-for-passwords-and-passphrases\n"
@@ -29,7 +34,6 @@ def init_store(args) -> None:
         password = input("Create Strong and Memorable Master Password: ")
         register_user(username, password)
     else:
-        # TODO: remove this when complete
         print("Username exit")
         exit()
 
@@ -78,7 +82,12 @@ def main_logic(args):
             or user_input.upper() == "A"
             or user_input.upper() == ".ADD"
         ):
-            site = input(".add website_url > ")
+            while True:
+                site = input(".add website_url > ").strip()
+                if not site:
+                    print(colored_string("You Must Add a Website .^.", "RED"))
+                else:
+                    break
             site_pass = input(".add password (leave this blank for random password) > ")
             if not site_pass:
                 site_pass = generate_password()
@@ -97,6 +106,17 @@ def main_logic(args):
             or user_input.upper() == ".LIST"
         ):
             list_passwords(args.username, args.password)
+        if user_input.upper() == "D" or user_input.upper() == ".del":
+            while True:
+                site = input(".search entry > ").strip()
+                if not site:
+                    print(colored_string("You Must Add a Website .^.", "RED"))
+                else:
+                    break
+            get_password(args.username, args.password, site, 1)
+            id = input("Give the id of the entry you want to delete > ")
+            id = str(id).strip()
+            delete_passwod(args.username, args.password, id)
         if user_input.upper() == "X" or user_input.upper() == ".EXIT":
             break
 
