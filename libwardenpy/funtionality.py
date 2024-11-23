@@ -1,123 +1,64 @@
 import secrets
-import argon2
 import sqlite3
+
+import argon2
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 from libwardenpy.colors import colored_string
+from libwardenpy.db import get_connection
+
+### Unauth Funtions :(
 
 
-def add_password(username: str, master_password: str, site: str, password: str):
-    """Add an encrypted password for a site."""
-    key = authenticate_user(username, master_password)
-    if not key:
-        return
-    # Generate a random nonce
-    nonce = secrets.token_bytes(12)
-    # Create cipher instance
-    cipher = ChaCha20Poly1305(key)
-    # Encrypt the password
-    encrypted_password = cipher.encrypt(nonce, password.encode(), None)
-    with sqlite3.connect("db.sqlite3") as conn:
-        conn.execute(
-            "INSERT INTO passwords (username, site, encrypted_password, nonce) VALUES (?, ?, ?, ?)",
-            (username, site, encrypted_password, nonce),
-        )
-    print(f"Password for {site} stored successfully!")
-
-
-def get_password(username: str, master_password: str, site: str):
-    """Retrieve and decrypt password for a site."""
-    key = authenticate_user(username, master_password)
-    if not key:
-        return
-    with sqlite3.connect("db.sqlite3") as conn:
-        cursor = conn.execute(
-            "SELECT site, encrypted_password, nonce FROM passwords WHERE username = ? AND site LIKE ?",
-            (username, f"%{site}%"),
-        )
-        result = cursor.fetchall()
-        # new_result = cursor.fetchall()
-
-        if not result:
-            print(f"No password found for {site}")
-            return
-
-        for entryies in result:
-            site, encrypted_password, nonce = entryies
-            cipher = ChaCha20Poly1305(key)
-            try:
-                decrypted_password = cipher.decrypt(nonce, encrypted_password, None)
-                print(
-                    f"----------\nsite: {colored_string(site, 'BLUE')}\npassword: {colored_string(decrypted_password.decode('utf-8'), 'RED')}"
-                )
-            except Exception as e:
-                print(f"Error decrypting password: {e}")
-                return None
-
-
-def list_passwords(username: str, master_password: str):
-    """Retrieve and decrypt password for a site."""
-    key = authenticate_user(username, master_password)
-    if not key:
-        return
-    with sqlite3.connect("db.sqlite3") as conn:
-        cursor = conn.execute(
-            "SELECT encrypted_password, nonce, site FROM passwords WHERE username = ?;",
-            (username,),
-        )
-        result = cursor.fetchall()
-        if not result:
-            print(f"No password found for {username}")
-            return
-        cipher = ChaCha20Poly1305(key)
-        for entry in result:
-            encrypted_password, nonce, site = entry
-            try:
-                decrypted_password = cipher.decrypt(nonce, encrypted_password, None)
-                print(
-                    f"----------\nsite: {colored_string(site, 'BLUE')}\npassword: {colored_string(decrypted_password.decode('utf-8'), 'RED')}"
-                )
-            except Exception as e:
-                print(f"Error decrypting password: {e}")
-
-
+### this funtion get username and password
+### then create salt(random bytes) and a hash for password using argon2
+### save them in the sqlite3 database
 def register_user(username: str, master_password: str):
     salt = secrets.token_bytes(16)
-    # Hash the master password for authentication
     password_hash = argon2.PasswordHasher().hash(master_password)
+
     try:
-        with sqlite3.connect("db.sqlite3") as conn:
+        with get_connection() as conn:
             conn.execute(
                 "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
                 (username, password_hash, salt),
             )
-        print(f"User {username} registered successfully!")
+            conn.commit()
+        print(colored_string(f"User {username} registered successfully!", "GREEN"))
+
     except sqlite3.IntegrityError:
-        print("Username already exists!")
+        print(colored_string("Username already exists!", "RED"))
 
 
+### this funtion get username and passwod
+### then search the sqlite3 database for the user and if found
+### verify the password hash matches given password and if matches create a new
+### key for to encrypt the child items ( passwords, sites under given user) else
+### if given user not found exit the program and if passwod doesnot match give a err
 def authenticate_user(username: str, master_password: str):
-    """Authenticate user and return encryption key if successful."""
-    with sqlite3.connect("db.sqlite3") as conn:
+    with get_connection() as conn:
         cursor = conn.execute(
             "SELECT password_hash, salt FROM users WHERE username = ?", (username,)
         )
         result = cursor.fetchone()
+
         if not result:
             print("User not found!")
             exit()
+
         stored_hash, salt = result
         try:
             argon2.PasswordHasher().verify(stored_hash, master_password)
-            # If verification succeeds, derive the encryption key
             return derive_key(master_password, salt)
+
         except argon2.exceptions.VerifyMismatchError as err:
             print(f"Incorrect password! {err}")
             return None
 
 
+### create a new key for child items
+### part of the above authenticate_funtion.
 def derive_key(master_password: str, salt: bytes):
-    """Derive encryption key from master password using Argon2. using ARGON2ID versino"""
     hasher = argon2.low_level.hash_secret_raw(
         secret=master_password.encode(),
         salt=salt,
@@ -128,3 +69,128 @@ def derive_key(master_password: str, salt: bytes):
         type=argon2.low_level.Type.ID,
     )
     return hasher
+
+
+### auth funtions :)
+
+
+### this funtino get site and password and encrpt then in chcacha algorithm and store
+### them in the sqlite3 database
+### nonce is randomly generated bytes strem that protects passwords on ranbow password table attacks
+def add_password(username: str, master_password: str, site: str, password: str):
+    key = authenticate_user(username, master_password)
+
+    if not key:
+        return
+
+    nonce = secrets.token_bytes(12)
+    cipher = ChaCha20Poly1305(key)
+
+    encrypted_password = cipher.encrypt(nonce, password.encode(), None)
+
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO passwords (username, site, encrypted_password, nonce) VALUES (?, ?, ?, ?)",
+            (username, site, encrypted_password, nonce),
+        )
+        conn.commit()
+
+    print(f"Password for {site} stored successfully!")
+
+
+### get the password for the site from sqlite database and decrept them
+### and show them
+def get_password(username: str, master_password: str, site: str, site_id: int = 0):
+    key = authenticate_user(username, master_password)
+
+    if not key:
+        return
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT id, site, encrypted_password, nonce FROM passwords WHERE username = ? AND site LIKE ?",
+            (username, f"%{site}%"),
+        )
+
+        result = cursor.fetchall()
+
+        if not result:
+            print(f"No entries found for {site}")
+            return
+
+        for entryies in result:
+            id, site, encrypted_password, nonce = entryies
+            cipher = ChaCha20Poly1305(key)
+            try:
+                decrypted_password = cipher.decrypt(nonce, encrypted_password, None)
+                if site_id:
+                    print(
+                        f"----------\n"
+                        f"id: {colored_string(id, 'GREEN')}\n"
+                        f"site: {colored_string(site, 'BLUE')}\n"
+                        f"password: {colored_string(decrypted_password.decode('utf-8'), 'RED')}"
+                    )
+                else:
+                    print(
+                        f"----------\n"
+                        f"site: {colored_string(site, 'BLUE')}\n"
+                        f"password: {colored_string(decrypted_password.decode('utf-8'), 'RED')}"
+                    )
+
+            except Exception as e:
+                print(f"Error decrypting password: {e}")
+                return None
+
+
+### get the passwords of all the sites from sqlite database and decrept them
+### and show them
+def list_passwords(username: str, master_password: str):
+    key = authenticate_user(username, master_password)
+
+    if not key:
+        return
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT encrypted_password, nonce, site FROM passwords WHERE username = ?;",
+            (username,),
+        )
+
+        result = cursor.fetchall()
+
+        if not result:
+            print(f"No password found for {username}")
+            return
+
+        cipher = ChaCha20Poly1305(key)
+        for entry in result:
+            encrypted_password, nonce, site = entry
+            try:
+                decrypted_password = cipher.decrypt(nonce, encrypted_password, None)
+                print(
+                    f"----------\n"
+                    f"site: {colored_string(site, 'BLUE')}\n"
+                    f"password: {colored_string(decrypted_password.decode('utf-8'), 'RED')}"
+                )
+
+            except Exception as e:
+                print(f"Error decrypting password: {e}")
+
+
+def delete_passwod(username: str, master_password: str, site_id: str):
+    key = authenticate_user(username, master_password)
+
+    if not key:
+        return
+    try:
+        print(site_id)
+        with get_connection() as conn:
+            conn.execute(
+                "DELETE FROM passwords WHERE id = ? ",
+                (site_id,),
+            )
+            conn.commit()
+
+    except Exception as e:
+        print(f"Error Deleting the  Entriy: {e}")
+        return None
