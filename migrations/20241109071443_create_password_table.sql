@@ -4,5 +4,5 @@ CREATE TABLE IF NOT EXISTS passwords (
 	site TEXT NOT NULL,
 	encrypted_password BLOB NOT NULL,
 	nonce BLOB NOT NULL,
-	FOREIGN KEY (username) REFERENCES users(id)
+	FOREIGN KEY (username) REFERENCES users(username)
 );
