@@ -183,7 +183,6 @@ def delete_passwod(username: str, master_password: str, site_id: str):
     if not key:
         return
     try:
-        print(site_id)
         with get_connection() as conn:
             conn.execute(
                 "DELETE FROM passwords WHERE id = ? ",
