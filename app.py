@@ -60,11 +60,13 @@ __        __            _            ______   __
    \_/\_/ \__,_|_|  \__,_|\___|_| |_|_|    |_|
                             -- created by supun
 
-type .help for help and x or .exit to exit.
+type .help or ? for help and x or .exit to exit.
 
-   1.) Add a Password       [A]
-   2.) Search Site Password [S]
-   3.) List Passwords       [L]
+   1.) Add a  Entry        [A]
+   2.) Search Entry        [S]
+   3.) List   Entries      [L]
+   4.) Delete Entry        [D]
+   4.) Delete Entry        [D]
         """
         print(banner)
         main_logic(args)
@@ -106,7 +108,7 @@ def main_logic(args):
             or user_input.upper() == ".LIST"
         ):
             list_passwords(args.username, args.password)
-        if user_input.upper() == "D" or user_input.upper() == ".del":
+        if user_input.upper() == "D" or user_input.upper() == ".DEL":
             while True:
                 site = input(".search entry > ").strip()
                 if not site:
@@ -150,9 +152,10 @@ def parse_arguments() -> argparse.Namespace:
 help_msg = """
 .help, ?        Show this menu
 .clear          Clear the screen
-.add, A|a       Add a password to the vault
-.search, S|s    Search a site/password in the vault
-.list, L|l      List all passwords in the vault
+.add, A|a       Add a entry to the vault
+.search, S|s    Search a entry in the vault
+.list, L|l      List all the entries in the vault
+.del, D|d       Delete a entry in the vault
 .exit, X|x      Exit and lock the vault
 """
 
