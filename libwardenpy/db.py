@@ -9,5 +9,10 @@ def get_connection(DB_PATH="data/db.sqlite3"):
     conn = sqlite3.connect(DB_PATH)
     try:
         yield conn
+    except Exception as e:
+        conn.rollback()
+        raise e
+    else:
+        conn.commit()
     finally:
         conn.close()

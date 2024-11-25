@@ -4,6 +4,9 @@ import os
 from libwardenpy.colors import colored_string, print_colored
 from libwardenpy.db import get_connection
 from libwardenpy.funtionality import (
+    AuthenticatedData,
+    Entry,
+    UnAuthData,
     add_password,
     authenticate_user,
     delete_passwod,
@@ -16,14 +19,18 @@ from libwardenpy.passgen import generate_password
 
 authenticated = False
 
+data: UnAuthData = UnAuthData("", "")
+auth_data: AuthenticatedData = AuthenticatedData("", b"")
+
 
 def init_store(args) -> None:
+    global data
     migrate_DB()
     USER_NAME_EXIST = False
     with get_connection() as conn:
         cursor = conn.execute("SELECT username FROM users;")
-        username = args.username
-        if (username,) in cursor.fetchall():
+        data.username = args.username
+        if (data.username,) in cursor.fetchall():
             USER_NAME_EXIST = True
     if not USER_NAME_EXIST:
         tips_text1 = (
@@ -31,26 +38,31 @@ def init_store(args) -> None:
             "guide: https://anonymousplanet.org/guide.html#appendix-a2-guidelines-for-passwords-and-passphrases\n"
         )
         print_colored(tips_text1, "red")
-        password = input("Create Strong and Memorable Master Password: ")
-        register_user(username, password)
+        data.master_password = input("Create Strong and Memorable Master Password: ")
+        register_user(get_connection(), data)
     else:
         print("Username exit")
         exit()
 
 
 def main() -> None:
-    global authenticated
+    global authenticated, auth_data, data, pool
     args = parse_arguments()
+    data.username = args.username
+    data.master_password = args.password
     if args.password is not None and args.username is not None:
-        password = args.password
-        if authenticate_user(args.username, password) is not None:
+        key = authenticate_user(get_connection(), data)
+        if key is not None:
+            auth_data.key = key
             authenticated = True
     elif args.username is not None and args.password is None:
-        password = input("Enter Master Password: ")
-        args.password = password
-        if authenticate_user(args.username, password) is not None:
+        data.master_password = input("Enter Master Password: ")
+        key = authenticate_user(get_connection(), data)
+        if key is not None:
             authenticated = True
+            auth_data.key = key
 
+    auth_data.username = data.username
     if authenticated:
         banner = r"""
 __        __            _            ______   __
@@ -66,13 +78,14 @@ type .help or ? for help and x or .exit to exit.
    2.) Search Entry        [S]
    3.) List   Entries      [L]
    4.) Delete Entry        [D]
-   4.) Delete Entry        [D]
         """
         print(banner)
-        main_logic(args)
+        main_logic()
 
 
-def main_logic(args):
+def main_logic():
+    global auth_data
+    print(auth_data.key)
     while True:
         user_input = input("> ")
         if user_input.upper() == ".CLEAR":
@@ -93,21 +106,26 @@ def main_logic(args):
             site_pass = input(".add password (leave this blank for random password) > ")
             if not site_pass:
                 site_pass = generate_password()
-            add_password(args.username, args.password, site, site_pass)
+            entry: Entry = Entry(site, site_pass)
+            add_password(get_connection(), auth_data, entry)
         if (
             user_input == "2"
             or user_input.upper() == "S"
             or user_input.upper() == ".SEARCH"
         ):
             site = input(".search > ")
-            get_password(args.username, args.password, site)
+            a = get_password(get_connection(), auth_data, site)
+            print(a)
 
         if (
             user_input == "3"
             or user_input.upper() == "L"
             or user_input.upper() == ".LIST"
         ):
-            list_passwords(args.username, args.password)
+            passwords = list_passwords(get_connection(), auth_data)
+            if passwords is None:
+                print(f"No passwords for user {auth_data.username}")
+            print(passwords)
         if user_input.upper() == "D" or user_input.upper() == ".DEL":
             while True:
                 site = input(".search entry > ").strip()
@@ -115,10 +133,14 @@ def main_logic(args):
                     print(colored_string("You Must Add a Website .^.", "RED"))
                 else:
                     break
-            get_password(args.username, args.password, site, 1)
-            id = input("Give the id of the entry you want to delete > ")
-            id = str(id).strip()
-            delete_passwod(args.username, args.password, id)
+            list_of_entries = get_password(get_connection(), auth_data, site)
+            if list_of_entries is None:
+                print(f"no entries have {site}")
+            if list_of_entries is not None:
+                print(list_of_entries)
+                id = input("Give the id of the entry you want to delete > ")
+                id = str(id).strip()
+                delete_passwod(get_connection(), auth_data, id)
         if user_input.upper() == "X" or user_input.upper() == ".EXIT":
             break
 
