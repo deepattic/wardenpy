@@ -6,8 +6,6 @@ from typing import List
 import argon2
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
-from libwardenpy.colors import colored_string
-
 
 @dataclass
 class UnAuthData:
@@ -46,7 +44,7 @@ class Entry:
 ### this funtion get username and password
 ### then create salt(random bytes) and a hash for password using argon2
 ### save them in the sqlite3 database
-def register_user(connection, data: UnAuthData) -> None | str:
+def register_user(connection, data: UnAuthData) -> bool:
     salt = secrets.token_bytes(16)
     password_hash = argon2.PasswordHasher().hash(data.master_password)
 
@@ -56,10 +54,11 @@ def register_user(connection, data: UnAuthData) -> None | str:
                 "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
                 (data.username, password_hash, salt),
             )
-        print(colored_string(f"User {data.username} registered successfully!", "GREEN"))
+            return True
 
     except sqlite3.IntegrityError as e:
         print(e)
+        return False
 
 
 ### this funtion get username and passwod

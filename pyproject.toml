@@ -7,6 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
     "argon2-cffi>=23.1.0",
     "cryptography>=43.0.3",
+    "rich>=13.9.4",
+    "typer>=0.13.1",
 ]
 
 [dependency-groups]
