@@ -1,10 +1,11 @@
 import os
 from typing import Annotated
 
+import questionary
 import typer
 from rich import print
 from rich.console import Console
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from libwardenpy.db import get_connection
@@ -151,10 +152,26 @@ def main_logic():
             if list_of_entries is None:
                 print(f"no entries have {site}")
             if list_of_entries is not None:
-                print(list_of_entries)
-                id = input("Give the id of the entry you want to delete > ")
-                id = str(id).strip()
-                delete_passwod(get_connection(), auth_data, id)
+                table = Table(title="List of Entries")
+                table.add_column("id", style="bold blue")
+                table.add_column("Site/Url", style="green")
+                table.add_column("Password", style="red")
+                for item in list_of_entries:
+                    table.add_row(str(item[0]), item[1], item[2].decode("utf-8"))
+                console = Console()
+                console.print(table)
+                choices = [str(id[0]) for id in list_of_entries]
+                id = questionary.select(
+                    "Which entry do you want to delet?",
+                    choices=choices,
+                    qmark="> ",
+                    pointer=">",
+                ).ask()
+                delete_the_entry: bool = Confirm.ask(
+                    f"Are You sure You want to delete [bold red]{id}[/bold red]?"
+                )
+                if delete_the_entry:
+                    delete_passwod(get_connection(), auth_data, id)
 
         if user_input in ("X", ".EXIT"):
             break
