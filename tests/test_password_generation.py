@@ -1,10 +1,11 @@
 import random
+
 from libwardenpy.passgen import generate_password
 
 
 def test_default_password_generation() -> None:
     default_password = generate_password()
-    assert len(default_password) == 14
+    assert len(default_password) == 20
 
 
 def test_password_generation_with_length() -> None:

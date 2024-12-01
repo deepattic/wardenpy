@@ -1,11 +1,15 @@
+import csv
 import os
+import time
+from datetime import datetime
 from typing import Annotated
 
 import questionary
 import typer
 from rich import print
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Prompt
 from rich.table import Table
 
 from libwardenpy.db import get_connection
@@ -76,6 +80,44 @@ def create(
             print("Username exists")
 
 
+@app.command()
+def export(
+    username: str,
+    password: Annotated[
+        str,
+        typer.Option(
+            "--password", "-p", prompt=True, confirmation_prompt=True, hide_input=True
+        ),
+    ],
+):
+    global authenticated, auth_data, data
+    data.username = username
+    data.master_password = password
+    auth_data.username = username
+    key = authenticate_user(get_connection(), data)
+    if key is not None:
+        auth_data.key = key
+        authenticated = True
+    passwords = list_passwords(get_connection(), auth_data)
+    if passwords is not None:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+        ) as progress:
+            progress.add_task(description="Writing data to csv...", total=None)
+            time.sleep(1.5)
+            with open(
+                f"data/export-{datetime.today().date()}.csv", "w", newline=""
+            ) as csvfile:
+                writer = csv.writer(
+                    csvfile, delimiter=",", quotechar="|", quoting=csv.QUOTE_MINIMAL
+                )
+                for entry in passwords:
+                    writer.writerow(entry)
+        print("Done!")
+
+
 def main() -> None:
     global authenticated
     if authenticated:
@@ -86,13 +128,14 @@ __        __            _            ______   __
   \ V  V / (_| | | | (_| |  __/ | | |  __/ | |
    \_/\_/ \__,_|_|  \__,_|\___|_| |_|_|    |_|
                             -- created by supun
-
 type .help or ? for help and x or .exit to exit.
 
    1.) Add a  Entry        [A]
    2.) Search Entry        [S]
    3.) List   Entries      [L]
    4.) Delete Entry        [D]
+
+   PRESS X TO QUITE
         """
         print(banner)
         main_logic()
@@ -136,7 +179,7 @@ def main_logic():
                 table.add_column("Site/Url", style="blue")
                 table.add_column("Password", style="red")
                 for item in passwords:
-                    table.add_row(item[0], item[1].decode("utf-8"))
+                    table.add_row(item[0], item[1])
                 console = Console()
                 console.print(table)
 
@@ -167,8 +210,9 @@ def main_logic():
                     qmark="> ",
                     pointer=">",
                 ).ask()
-                delete_the_entry: bool = Confirm.ask(
-                    f"Are You sure You want to delete [bold red]{id}[/bold red]?"
+                delete_the_entry = Prompt.ask(
+                    f"Are You sure You want to delete [bold red]{id}[/bold red] {'[y/N]'} ?",
+                    default=False,
                 )
                 if delete_the_entry:
                     delete_passwod(get_connection(), auth_data, id)
