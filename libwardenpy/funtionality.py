@@ -1,12 +1,10 @@
 import secrets
 import sqlite3
 from dataclasses import dataclass
-from typing import List
+from typing import Optional
 
 import argon2
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-from libwardenpy.colors import colored_string
 
 
 @dataclass
@@ -23,9 +21,9 @@ class UnAuthData:
 @dataclass
 class AuthenticatedData:
     username: str
-    key: bytes | None
+    key: Optional[bytes]
 
-    def __init__(self, username: str, key: bytes | None) -> None:
+    def __init__(self, username: str, key: Optional[bytes]) -> None:
         self.username = username
         self.key = key
 
@@ -46,7 +44,7 @@ class Entry:
 ### this funtion get username and password
 ### then create salt(random bytes) and a hash for password using argon2
 ### save them in the sqlite3 database
-def register_user(connection, data: UnAuthData) -> None | str:
+def register_user(connection, data: UnAuthData) -> bool:
     salt = secrets.token_bytes(16)
     password_hash = argon2.PasswordHasher().hash(data.master_password)
 
@@ -56,10 +54,11 @@ def register_user(connection, data: UnAuthData) -> None | str:
                 "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
                 (data.username, password_hash, salt),
             )
-        print(colored_string(f"User {data.username} registered successfully!", "GREEN"))
+            return True
 
     except sqlite3.IntegrityError as e:
         print(e)
+        return False
 
 
 ### this funtion get username and passwod
@@ -67,7 +66,7 @@ def register_user(connection, data: UnAuthData) -> None | str:
 ### verify the password hash matches given password and if matches create a new
 ### key for to encrypt the child items ( passwords, sites under given user) else
 ### if given user not found exit the program and if passwod doesnot match give a err
-def authenticate_user(connection, data: UnAuthData) -> bytes | None:
+def authenticate_user(connection, data: UnAuthData) -> Optional[bytes]:
     with connection as conn:
         cursor = conn.execute(
             "SELECT password_hash, salt FROM users WHERE username = ?",
@@ -129,7 +128,7 @@ def add_password(connection, data: AuthenticatedData, entry: Entry) -> None:
 
 ### get the password for the site from sqlite database and decrept them
 ### and show them
-def get_password(connection, data: AuthenticatedData, site: str) -> List | None:
+def get_password(connection, data: AuthenticatedData, site: str) -> Optional[list]:
     if not data.key:
         return
 
@@ -155,7 +154,7 @@ def get_password(connection, data: AuthenticatedData, site: str) -> List | None:
 
 ### get the passwords of all the sites from sqlite database and decrept them
 ### and show them
-def list_passwords(connection, data: AuthenticatedData) -> List | None:
+def list_passwords(connection, data: AuthenticatedData) -> Optional[list]:
     if not data.key:
         return
 
@@ -172,7 +171,9 @@ def list_passwords(connection, data: AuthenticatedData) -> List | None:
         return [
             (
                 site,
-                ChaCha20Poly1305(data.key).decrypt(nonce, encrypted_password, None),
+                ChaCha20Poly1305(data.key)
+                .decrypt(nonce, encrypted_password, None)
+                .decode("utf-8"),
             )
             for site, encrypted_password, nonce in result
         ]

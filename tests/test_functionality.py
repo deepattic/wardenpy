@@ -139,8 +139,8 @@ def test_list_passwords():
         passwords = list_passwords(conn, auth_data)
         assert passwords is not None
         assert len(passwords) == 2
-        assert any(p[0] == "site1.com" and p[1].decode() == "pass1" for p in passwords)
-        assert any(p[0] == "site2.com" and p[1].decode() == "pass2" for p in passwords)
+        assert any(p[0] == "site1.com" and p[1] == "pass1" for p in passwords)
+        assert any(p[0] == "site2.com" and p[1] == "pass2" for p in passwords)
 
 
 def test_delete_password():
